@@ -1,0 +1,51 @@
+project:
+  name: "test_run"
+
+paths:
+  data_dir: "tests/data"
+  resources_dir: "resources"
+  results_dir: "results"
+  downloads_dir: "downloads"
+
+dataset:
+  geo_accession: "TEST"
+  raw_tar: "TEST_RAW.tar"
+  raw_extract_dir: "TEST_RAW_extracted"
+  manifest_tar: "TEST_manifest.tar.gz"
+  manifest_extract_dir: "TEST_manifest_extracted"
+  manifest_csv_gz: "TEST_manifest.csv.gz"
+  manifest_csv: "TEST_manifest.csv"
+
+array:
+  egt: "test.egt"
+  bpm: "test.bpm"
+  csv_manifest: "TEST_manifest.csv"
+  gtc_batch: "TESTbatch"
+
+reference:
+  fasta_name: "hg19.fa"
+  fasta_url: "http://example.org/hg19.fa.gz"
+
+iaap:
+  tarball_name: "iaap.tar.gz"
+
+runtime:
+  gc_threshold: 0.15
+  dtype: "float32"
+  workers: 2
+  force_cpu: true
+  plot_qc: false
+  batch_size: 1000
+
+threads:
+  install: 2
+  idat_to_gtc: 2
+
+tools:
+  htslib_repo: "https://github.com/samtools/htslib.git"
+  bcftools_repo: "https://github.com/samtools/bcftools.git"
+  samtools_repo: "https://github.com/samtools/samtools.git"
+  gtc2vcf_plugin_base_url: "https://raw.githubusercontent.com/freeseek/gtc2vcf/master"
+
+versions:
+  note: "test configuration"

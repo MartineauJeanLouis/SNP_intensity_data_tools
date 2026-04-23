@@ -1,0 +1,25 @@
+name: snp-intensity-tools
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - pandas
+  - numpy
+  - matplotlib
+  - snakemake-minimal
+  - wget
+  - git
+  - make
+  - automake
+  - autoconf
+  - gcc
+  - gxx
+  - zlib
+  - xz
+  - bzip2
+  - gzip
+  - tar
+  - pip
+  - pip:
+      - cupy-cuda12x ; platform_system == "Linux"

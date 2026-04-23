@@ -1,0 +1,9 @@
+# Force LF for all code
+*.sh text eol=lf
+*.py text eol=lf
+*.smk text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# Optional but safe
+* text=auto

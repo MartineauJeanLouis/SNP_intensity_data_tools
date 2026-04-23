@@ -1,0 +1,288 @@
+configfile: "config/config.yaml"
+
+import os
+import shlex
+
+PROJECT = config["project"]["name"]
+
+PATHS = config["paths"]
+DATA_DIR = PATHS["data_dir"]
+RESOURCES_DIR = PATHS["resources_dir"]
+RESULTS_DIR = PATHS["results_dir"]
+
+DATASET = config["dataset"]
+ARRAY = config["array"]
+REFERENCE = config["reference"]
+RUNTIME = config["runtime"]
+
+GTC_BATCH = ARRAY["gtc_batch"]
+GENOME_FASTA = REFERENCE["fasta_name"]
+GENOME_URL = REFERENCE["fasta_url"]
+
+GC_THRESHOLD = RUNTIME["gc_threshold"]
+DTYPE = RUNTIME["dtype"]
+WORKERS = RUNTIME["workers"]
+FORCE_CPU = RUNTIME["force_cpu"]
+PLOT_QC = RUNTIME["plot_qc"]
+
+INSTALL_THREADS = config["threads"]["install"]
+IDAT_TO_GTC_THREADS = config["threads"]["idat_to_gtc"]
+
+# ---------------------------
+# CNV configuration
+# ---------------------------
+CNV_CFG = config["cnv"]
+PENNCNV_DIR = CNV_CFG["penncnv_dir"]
+
+CNV_MINLENGTH = CNV_CFG["minlength"]
+CNV_MINCONF = CNV_CFG["minconf"]
+CNV_TOP_N_PLOTS = CNV_CFG.get("top_n_plots", 5)
+CNV_PLOT_WIDTH = CNV_CFG.get("plot_width", 12)
+CNV_PLOT_HEIGHT = CNV_CFG.get("plot_height", 7)
+CNV_PAD_PROBES = CNV_CFG.get("pad_probes", 300)
+
+CNV_CALLING_THREADS = config["threads"].get("cnv_calling", 8)
+PROJECT_ROOT = f"{RESULTS_DIR}/{PROJECT}"
+STATE_DIR = f"{PROJECT_ROOT}/.workflow_state"
+OUTPUT_PATH = f"{PROJECT_ROOT}/output"
+PARSED_PATH = f"{OUTPUT_PATH}/Final_output"
+
+INSTALL_DONE = f"{STATE_DIR}/install_toolchain.done"
+REFDATA_DONE = f"{STATE_DIR}/refdata_ready.done"
+
+# ---------------------------
+# CNV paths
+# ---------------------------
+PENNCNV_DIR_ABS = f"{PROJECT_ROOT}/{PENNCNV_DIR}"
+CNV_HMMFILE = os.path.join(PENNCNV_DIR_ABS, CNV_CFG["hmmfile"])
+PENNCNV_DONE = f"{STATE_DIR}/install_penncnv.done"
+
+CNV_DIR = f"{PARSED_PATH}/cnv"
+CNV_SAMPLES = f"{CNV_DIR}/samples.txt"
+CNV_PFB = f"{CNV_DIR}/pfb/prob.pfb"
+CNV_SIGNALS_DIR = f"{CNV_DIR}/signals"
+CNV_CALLS_DIR = f"{CNV_DIR}/calls"
+CNV_LOGS_DIR = f"{CNV_DIR}/logs"
+CNV_SUMMARY_DIR = f"{CNV_DIR}/summary"
+CNV_PLOTS_DIR = f"{CNV_DIR}/plots"
+
+PLOT_TARGETS = [
+    f"{PARSED_PATH}/qc/plots/sample_genotyping_success_rate.png",
+    f"{PARSED_PATH}/qc/plots/probe_call_rate.png",
+    f"{PARSED_PATH}/qc/plots/probe_pfb.png",
+    f"{PARSED_PATH}/qc/plots/probe_call_rate_histogram.png",
+    f"{PARSED_PATH}/qc/plots/probe_call_rate_density.png",
+    f"{PARSED_PATH}/qc/plots/probe_pfb_histogram.png",
+    f"{PARSED_PATH}/qc/plots/probe_pfb_density.png",
+] if PLOT_QC else []
+
+include: "rules/setup.smk"
+include: "rules/conversion.smk"
+include: "rules/qc.smk"
+
+
+rule all:
+    input:
+        INSTALL_DONE,
+        REFDATA_DONE,
+        PENNCNV_DONE,
+        f"{PROJECT_ROOT}/genome/{GENOME_FASTA}",
+        f"{PROJECT_ROOT}/genome/{GENOME_FASTA}.fai",
+        f"{OUTPUT_PATH}/gtc.list.txt",
+        f"{OUTPUT_PATH}/gtc_data",
+        f"{OUTPUT_PATH}/gtc2vcf/{GTC_BATCH}.tsv",
+        f"{PARSED_PATH}/qc/probe_qc.tsv",
+        f"{PARSED_PATH}/qc/sample_qc.tsv",
+        f"{PARSED_PATH}/qc/probe_pfb.tsv",
+        f"{PARSED_PATH}/per_sample",
+        CNV_SAMPLES,
+        CNV_PFB,
+        f"{CNV_SUMMARY_DIR}/all_cnvs.tsv",
+        f"{CNV_SUMMARY_DIR}/top{CNV_TOP_N_PLOTS}_cnvs.tsv",
+        f"{CNV_PLOTS_DIR}/top_cnv_plots.done",
+        *PLOT_TARGETS
+
+
+# ---------------------------
+# CNV checkpoint + helpers
+# ---------------------------
+checkpoint extract_cnv_samples:
+    input:
+        f"{OUTPUT_PATH}/gtc2vcf/{GTC_BATCH}.tsv"
+    output:
+        CNV_SAMPLES
+    shell:
+        r"""
+        mkdir -p {CNV_DIR}
+        python3 workflow/scripts/extract_sample_ids.py \
+            --input {input} \
+            --output {output}
+        """
+
+
+def get_cnv_samples(wildcards):
+    ckpt = checkpoints.extract_cnv_samples.get(**wildcards)
+    with open(ckpt.output[0], "r", encoding="utf-8") as fh:
+        return [line.strip() for line in fh if line.strip()]
+
+
+def get_signal_outputs(wildcards):
+    return expand(
+        f"{CNV_SIGNALS_DIR}/{{sample}}.penncnv.tsv",
+        sample=get_cnv_samples(wildcards)
+    )
+
+
+def get_rawcnv_outputs(wildcards):
+    return expand(
+        f"{CNV_CALLS_DIR}/autosome_{{sample}}.rawcnv",
+        sample=get_cnv_samples(wildcards)
+    )
+
+
+# ---------------------------
+# CNV rules
+# ---------------------------
+rule install_penncnv:
+    output:
+        touch(PENNCNV_DONE)
+    log:
+        f"{PROJECT_ROOT}/logs/install_penncnv.log"
+    shell:
+        r"""
+        mkdir -p {PROJECT_ROOT}/logs {STATE_DIR}
+        bash workflow/scripts/install_penncnv.sh {PROJECT_ROOT} {PENNCNV_DIR} > {log} 2>&1
+        touch {output}
+        """
+
+
+rule build_penncnv_pfb:
+    input:
+        f"{PARSED_PATH}/qc/probe_pfb.tsv"
+    output:
+        CNV_PFB
+    log:
+        f"{PROJECT_ROOT}/logs/build_penncnv_pfb.log"
+    shell:
+        r"""
+        mkdir -p $(dirname {output}) {PROJECT_ROOT}/logs
+        python3 workflow/scripts/build_penncnv_pfb.py \
+            --input {input} \
+            --output {output} > {log} 2>&1
+        """
+
+
+rule prepare_penncnv_signal:
+    input:
+        per_sample_dir=f"{PARSED_PATH}/per_sample"
+    output:
+        f"{CNV_SIGNALS_DIR}/{{sample}}.penncnv.tsv"
+    params:
+        sample_file=lambda wildcards: f"{PARSED_PATH}/per_sample/{wildcards.sample}.tsv"
+    log:
+        f"{PROJECT_ROOT}/logs/prepare_penncnv_signal_{{sample}}.log"
+    shell:
+        r"""
+        mkdir -p {CNV_SIGNALS_DIR} {PROJECT_ROOT}/logs
+        test -f {params.sample_file}
+        python3 workflow/scripts/prepare_penncnv_signal.py \
+            --input {params.sample_file} \
+            --output {output} > {log} 2>&1
+        """
+
+
+rule run_all_penncnv_signals:
+    input:
+        get_signal_outputs
+    output:
+        touch(f"{CNV_DIR}/signals.done")
+    shell:
+        r"""
+        touch {output}
+        """
+
+
+rule call_cnv:
+    input:
+        penncnv_done=PENNCNV_DONE,
+        pfb=CNV_PFB,
+        signal=f"{CNV_SIGNALS_DIR}/{{sample}}.penncnv.tsv",
+        hmm=CNV_HMMFILE,
+    output:
+        rawcnv=f"{CNV_CALLS_DIR}/autosome_{{sample}}.rawcnv",
+        log=f"{CNV_LOGS_DIR}/autosome_{{sample}}.log"
+    threads: 1
+    params:
+        penncnv=PENNCNV_DIR_ABS,
+        minlength=CNV_MINLENGTH,
+        minconf=CNV_MINCONF
+    shell:
+        r"""
+        mkdir -p {CNV_CALLS_DIR} {CNV_LOGS_DIR}
+        export PERL5LIB="{params.penncnv}/lib:{params.penncnv}/kext:${{PERL5LIB:-}}"
+        perl {params.penncnv}/detect_cnv.pl \
+            --test \
+            --hmmfile {input.hmm} \
+            --pfbfile {input.pfb} \
+            --logfile {output.log} \
+            --output {output.rawcnv} \
+            --minlength {params.minlength} \
+            --minconf {params.minconf} \
+            {input.signal}
+        """
+
+
+rule run_all_cnv_calls:
+    input:
+        get_rawcnv_outputs
+    output:
+        touch(f"{CNV_DIR}/cnv_calls.done")
+    shell:
+        r"""
+        touch {output}
+        """
+
+
+rule collect_all_cnvs:
+    input:
+        rawcnvs=get_rawcnv_outputs
+    output:
+        f"{CNV_SUMMARY_DIR}/all_cnvs.tsv",
+        f"{CNV_SUMMARY_DIR}/top{CNV_TOP_N_PLOTS}_cnvs.tsv"
+    run:
+        os.makedirs(CNV_SUMMARY_DIR, exist_ok=True)
+        raw_inputs = " ".join(shlex.quote(str(x)) for x in input.rawcnvs)
+        shell(
+            "python3 workflow/scripts/summarize_cnv_calls.py "
+            f"--inputs {raw_inputs} "
+            f"--all-output {shlex.quote(output[0])} "
+            f"--top-output {shlex.quote(output[1])} "
+            f"--top-n {CNV_TOP_N_PLOTS}"
+        )
+
+
+rule plot_top_cnvs:
+    input:
+        top_cnv=f"{CNV_SUMMARY_DIR}/top{CNV_TOP_N_PLOTS}_cnvs.tsv",
+        per_sample_dir=f"{PARSED_PATH}/per_sample"
+    output:
+        f"{CNV_PLOTS_DIR}/top_cnv_plots.done"
+    params:
+        outdir=CNV_PLOTS_DIR,
+        width=CNV_PLOT_WIDTH,
+        height=CNV_PLOT_HEIGHT,
+        pad_probes=CNV_PAD_PROBES
+    log:
+        f"{PROJECT_ROOT}/logs/plot_top_cnvs.log"
+    shell:
+        r"""
+        mkdir -p {CNV_PLOTS_DIR} {PROJECT_ROOT}/logs
+        python3 workflow/scripts/plot_top_cnvs.py \
+            --top-cnv {input.top_cnv} \
+            --per-sample-dir {input.per_sample_dir} \
+            --output-dir {params.outdir} \
+            --done-file {output} \
+            --width {params.width} \
+            --height {params.height} \
+            --pad-probes {params.pad_probes} > {log} 2>&1
+        """

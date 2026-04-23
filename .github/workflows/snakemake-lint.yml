@@ -1,0 +1,19 @@
+name: Snakemake lint
+
+on:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-file: workflow/envs/environment.yaml
+          cache-environment: true
+          init-shell: bash
+      - name: Lint workflow
+        shell: bash -l {0}
+        run: |
+          snakemake --snakefile workflow/Snakefile --configfile config/config.example.yaml --lint

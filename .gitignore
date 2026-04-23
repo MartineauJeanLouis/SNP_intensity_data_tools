@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Conda / envs
+.env
+.venv
+conda-meta/
+
+# Workflow runtime
+results/
+downloads/
+logs/
+*.log
+
+# Generated workflow state
+.workflow_state/
+*.done
+
+# Generated outputs
+output/
+Final_output/
+gtc.list.txt
+*.gtc
+*.fai
+
+# Large resources
+resources/*.fa
+resources/*.fa.gz
+resources/*.tar
+resources/*.tar.gz
+resources/*.gz
+resources/*.zip
+
+# Local tool builds
+htslib/
+bcftools/
+samtools/
+iaap-cli/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
