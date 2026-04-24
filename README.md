@@ -118,6 +118,6 @@ Please reach out with a brief description of your project for a tailored estimat
 
 If you’re working with SNP-array data and need support — whether technical, analytical, or infrastructural — feel free to reach out.
 
-**Contact:** djtilyon@hotmail.com
+**Contact:** martineau.jeanlouis.bioinfo2017@gmail.com
 
 You can also open an issue to start a discussion about your needs.
