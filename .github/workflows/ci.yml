@@ -21,4 +21,4 @@ jobs:
       - name: Validate Snakefile
         shell: bash -l {0}
         run: |
-          snakemake --snakefile workflow/Snakefile --configfile config/config.example.yaml --lint
+          snakemake --snakefile workflow/Snakefile --configfile config/config.yaml --lint
