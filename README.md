@@ -46,6 +46,7 @@ workflow/              Snakemake workflow, rules, scripts, and environments
 ```
 
 > 💼 Need help running or adapting this pipeline? see [Bioinformatics Services](#-bioinformatics-services).
+
 > 💼 Need help with SNP-array data? See [Service Packages](#-bioinformatics-services).
 
 ## 📚 Documentation
